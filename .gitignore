@@ -1,0 +1,23 @@
+# Build binary
+protoc-gen-ladybug
+
+# Go
+*.exe
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug logs
+*.log
+
+# OpenTrace local index
+.opentrace/

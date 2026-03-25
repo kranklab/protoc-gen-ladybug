@@ -1,0 +1,136 @@
+// Copyright 2026 OpenTrace Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Example protobuf definitions for a code-analysis knowledge graph.
+//
+// Any message whose name ends in "Node" will be picked up by
+// protoc-gen-ladybug and converted into a CREATE NODE TABLE statement.
+//
+// Usage:
+//
+//   # TypeScript (default)
+//   protoc --ladybug_out=. example/graph.proto
+//
+//   # Go
+//   protoc --ladybug_out=. --ladybug_opt=lang=go example/graph.proto
+//
+//   # Python
+//   protoc --ladybug_out=. --ladybug_opt=lang=py example/graph.proto
+//
+//   # Cypher DDL
+//   protoc --ladybug_out=. --ladybug_opt=lang=cypher example/graph.proto
+
+syntax = "proto3";
+
+package opentrace.example;
+
+option go_package = "github.com/opentrace/opentrace/protoc-gen-ladybug/example";
+
+import "ladybug/options.proto";
+
+// FileNode represents a source file in the repository.
+message FileNode {
+  string id       = 1;
+  string name     = 2;
+  string path     = 3;
+  string language = 4;
+  int32  lines    = 5;
+  bytes  checksum = 6;
+  repeated string labels = 7;
+}
+
+// FunctionNode represents a function or method definition.
+// Demonstrates (ladybug.column) and (ladybug.primary_key) options.
+message FunctionNode {
+  string id         = 1;
+  string name       = 2 [(ladybug.primary_key) = true];
+  string signature  = 3;
+  int32  start_line = 4 [(ladybug.column) = "startLine"];
+  int32  end_line   = 5 [(ladybug.column) = "endLine"];
+  bool   exported   = 6;
+  int32  complexity = 7;
+}
+
+// ClassNode represents a class, struct, or interface definition.
+message ClassNode {
+  string id       = 1;
+  string name     = 2;
+  string kind     = 3; // "class", "struct", "interface", etc.
+  int32  start_line = 4;
+  int32  end_line   = 5;
+  bool   exported   = 6;
+  repeated string implements = 7;
+}
+
+// PackageNode represents a language-level package or module.
+// Demonstrates primary key on a non-first field.
+message PackageNode {
+  string id      = 1;
+  string name    = 2;
+  string version = 3;
+  string path    = 4 [(ladybug.primary_key) = true];
+}
+
+// ServiceNode represents a deployable service or microservice.
+message ServiceNode {
+  string id       = 1;
+  string name     = 2;
+  string repo_url = 3 [(ladybug.column) = "repoUrl"];
+  uint32 port     = 4;
+  repeated string owners = 5;
+}
+
+// --- Relationship messages ------------------------------------------------
+//
+// Messages ending in "Rel" become REL TABLE factory functions.
+// The fields "source_id" and "target_id" are excluded from the DDL
+// columns — they are implicit in the FROM/TO clause which the consumer
+// supplies at call time.
+
+// CallsRel represents a function-calls-function relationship.
+message CallsRel {
+  string id         = 1;
+  string source_id  = 2;
+  string target_id  = 3;
+  string args       = 4;
+  float  confidence = 5;
+}
+
+// DefinedInRel represents a symbol-defined-in-file relationship.
+message DefinedInRel {
+  string id         = 1;
+  string source_id  = 2;
+  string target_id  = 3;
+  int32  start_line = 4 [(ladybug.column) = "startLine"];
+  int32  end_line   = 5 [(ladybug.column) = "endLine"];
+}
+
+// DependsOnRel represents a package-depends-on-package relationship.
+message DependsOnRel {
+  string id         = 1;
+  string source_id  = 2;
+  string target_id  = 3;
+  string version    = 4;
+  bool   dev        = 5;
+}
+
+// --- Non-graph messages ---------------------------------------------------
+//
+// This message does NOT end in "Node" or "Rel", so protoc-gen-ladybug
+// will skip it. It can be used as a nested type or for other protobuf
+// purposes.
+message Metadata {
+  string author     = 1;
+  string created_at = 2;
+}
