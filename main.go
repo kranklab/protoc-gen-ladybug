@@ -208,7 +208,7 @@ func buildRelDDLTemplate(t relTable, fromPlaceholder, toPlaceholder string) stri
 	for _, col := range t.Columns {
 		parts = append(parts, fmt.Sprintf("%s %s", col.Name, col.Type))
 	}
-	return fmt.Sprintf("CREATE REL TABLE IF NOT EXISTS %s(%s)", t.Name, strings.Join(parts, ", "))
+	return fmt.Sprintf("CREATE REL TABLE IF NOT EXISTS %s(%s)", toScreamingSnake(t.Name), strings.Join(parts, ", "))
 }
 
 // buildDDL generates a CREATE NODE TABLE statement for a single table.
@@ -301,7 +301,7 @@ func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 		g.P()
 		g.P("export const REL_SCHEMA = {")
 		for _, t := range rels {
-			g.P("  ", t.Name, ": (from: string, to: string) =>")
+			g.P("  ", toScreamingSnake(t.Name), ": (from: string, to: string) =>")
 			g.P("    `", buildRelDDLTemplate(t, "${from}", "${to}"), "`,")
 		}
 		g.P("} as const;")
@@ -310,7 +310,7 @@ func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 		// Rel type names.
 		g.P("export const REL_TYPES = [")
 		for _, t := range rels {
-			g.P("  '", t.Name, "',")
+			g.P("  '", toScreamingSnake(t.Name), "',")
 		}
 		g.P("] as const;")
 		g.P()
@@ -371,7 +371,7 @@ func generateGo(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 		// Rel type name constants.
 		for _, t := range rels {
 			g.P("// RelType", t.Name, " is the relationship type name for ", t.Name, " relationships.")
-			g.P("const RelType", t.Name, " = \"", t.Name, "\"")
+			g.P("const RelType", t.Name, " = \"", toScreamingSnake(t.Name), "\"")
 		}
 		g.P()
 
@@ -429,7 +429,7 @@ func generatePython(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) er
 
 		// Rel type name constants.
 		for _, t := range rels {
-			g.P("REL_TYPE_", toScreamingSnake(t.Name), ": Final[str] = \"", t.Name, "\"")
+			g.P("REL_TYPE_", toScreamingSnake(t.Name), ": Final[str] = \"", toScreamingSnake(t.Name), "\"")
 		}
 		g.P()
 

@@ -154,7 +154,7 @@ func TestBuildRelDDLTemplate(t *testing.T) {
 		},
 	}
 	got := buildRelDDLTemplate(table, "${from}", "${to}")
-	want := "CREATE REL TABLE IF NOT EXISTS Calls(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)"
+	want := "CREATE REL TABLE IF NOT EXISTS CALLS(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)"
 	if got != want {
 		t.Errorf("buildRelDDLTemplate() =\n  %s\nwant:\n  %s", got, want)
 	}
@@ -170,7 +170,7 @@ func TestBuildRelDDLTemplate_GoFormat(t *testing.T) {
 		},
 	}
 	got := buildRelDDLTemplate(table, "%s", "%s")
-	want := "CREATE REL TABLE IF NOT EXISTS DefinedIn(FROM %s TO %s, id STRING, start_line INT32, end_line INT32)"
+	want := "CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM %s TO %s, id STRING, start_line INT32, end_line INT32)"
 	if got != want {
 		t.Errorf("buildRelDDLTemplate() =\n  %s\nwant:\n  %s", got, want)
 	}

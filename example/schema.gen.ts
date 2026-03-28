@@ -19,18 +19,18 @@ export const NODE_TYPES = [
 export type NodeType = (typeof NODE_TYPES)[number];
 
 export const REL_SCHEMA = {
-  Calls: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS Calls(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)`,
-  DefinedIn: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS DefinedIn(FROM ${from} TO ${to}, id STRING, startLine INT32, endLine INT32)`,
-  DependsOn: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS DependsOn(FROM ${from} TO ${to}, id STRING, version STRING, dev BOOL)`,
+  CALLS: (from: string, to: string) =>
+    `CREATE REL TABLE IF NOT EXISTS CALLS(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)`,
+  DEFINED_IN: (from: string, to: string) =>
+    `CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM ${from} TO ${to}, id STRING, startLine INT32, endLine INT32)`,
+  DEPENDS_ON: (from: string, to: string) =>
+    `CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(FROM ${from} TO ${to}, id STRING, version STRING, dev BOOL)`,
 } as const;
 
 export const REL_TYPES = [
-  'Calls',
-  'DefinedIn',
-  'DependsOn',
+  'CALLS',
+  'DEFINED_IN',
+  'DEPENDS_ON',
 ] as const;
 
 export type RelType = (typeof REL_TYPES)[number];
