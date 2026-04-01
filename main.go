@@ -296,6 +296,43 @@ func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 	g.P()
 	g.P("export type NodeType = (typeof NODE_TYPES)[number];")
 
+	// Column metadata types.
+	g.P()
+	g.P("export type ColumnType =")
+	g.P("  | 'STRING' | 'INT32' | 'INT64' | 'UINT32' | 'UINT64'")
+	g.P("  | 'FLOAT' | 'DOUBLE' | 'BOOL' | 'BLOB'")
+	g.P("  | 'STRING[]' | 'INT32[]' | 'INT64[]' | 'UINT32[]' | 'UINT64[]'")
+	g.P("  | 'FLOAT[]' | 'DOUBLE[]' | 'BOOL[]' | 'BLOB[]';")
+	g.P()
+	g.P("export interface ColumnDef {")
+	g.P("  readonly name: string;")
+	g.P("  readonly type: ColumnType;")
+	g.P("}")
+	g.P()
+
+	// NODE_COLUMNS — all columns per node type.
+	g.P("export const NODE_COLUMNS: Readonly<Record<NodeType, readonly ColumnDef[]>> = {")
+	for _, t := range nodes {
+		g.P("  ", t.Name, ": [")
+		for _, col := range t.Columns {
+			g.P("    { name: '", col.Name, "', type: '", col.Type, "' },")
+		}
+		g.P("  ],")
+	}
+	g.P("} as const;")
+	g.P()
+
+	// NODE_COLUMN_NAMES — just the name strings per node type.
+	g.P("export const NODE_COLUMN_NAMES: Readonly<Record<NodeType, readonly string[]>> = {")
+	for _, t := range nodes {
+		g.P("  ", t.Name, ": [")
+		for _, col := range t.Columns {
+			g.P("    '", col.Name, "',")
+		}
+		g.P("  ],")
+	}
+	g.P("} as const;")
+
 	// Rel DDL factory functions.
 	if len(rels) > 0 {
 		g.P()
@@ -315,6 +352,30 @@ func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 		g.P("] as const;")
 		g.P()
 		g.P("export type RelType = (typeof REL_TYPES)[number];")
+		g.P()
+
+		// REL_COLUMNS — all columns per rel type.
+		g.P("export const REL_COLUMNS: Readonly<Record<RelType, readonly ColumnDef[]>> = {")
+		for _, t := range rels {
+			g.P("  ", toScreamingSnake(t.Name), ": [")
+			for _, col := range t.Columns {
+				g.P("    { name: '", col.Name, "', type: '", col.Type, "' },")
+			}
+			g.P("  ],")
+		}
+		g.P("} as const;")
+		g.P()
+
+		// REL_COLUMN_NAMES — just the name strings per rel type.
+		g.P("export const REL_COLUMN_NAMES: Readonly<Record<RelType, readonly string[]>> = {")
+		for _, t := range rels {
+			g.P("  ", toScreamingSnake(t.Name), ": [")
+			for _, col := range t.Columns {
+				g.P("    '", col.Name, "',")
+			}
+			g.P("  ],")
+		}
+		g.P("} as const;")
 	}
 
 	return nil
@@ -357,6 +418,40 @@ func generateGo(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 	}
 	g.P("}")
 
+	// Column metadata type.
+	g.P()
+	g.P("// ColumnDef describes a single column in a node table.")
+	g.P("type ColumnDef struct {")
+	g.P("\tName string")
+	g.P("\tType string")
+	g.P("}")
+	g.P()
+
+	// NodeColumns map.
+	g.P("// NodeColumns maps each node type to its ordered list of column definitions.")
+	g.P("var NodeColumns = map[string][]ColumnDef{")
+	for _, t := range nodes {
+		g.P("\tNodeType", t.Name, ": {")
+		for _, col := range t.Columns {
+			g.P("\t\t{Name: \"", col.Name, "\", Type: \"", col.Type, "\"},")
+		}
+		g.P("\t},")
+	}
+	g.P("}")
+	g.P()
+
+	// NodeColumnNames map.
+	g.P("// NodeColumnNames maps each node type to its ordered list of column names.")
+	g.P("var NodeColumnNames = map[string][]string{")
+	for _, t := range nodes {
+		g.P("\tNodeType", t.Name, ": {")
+		for _, col := range t.Columns {
+			g.P("\t\t\"", col.Name, "\",")
+		}
+		g.P("\t},")
+	}
+	g.P("}")
+
 	// Rel DDL factory functions.
 	if len(rels) > 0 {
 		g.P()
@@ -380,6 +475,32 @@ func generateGo(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 		g.P("var RelTypes = []string{")
 		for _, t := range rels {
 			g.P("\tRelType", t.Name, ",")
+		}
+		g.P("}")
+		g.P()
+
+		// RelColumns map.
+		g.P("// RelColumns maps each rel type to its ordered list of column definitions.")
+		g.P("var RelColumns = map[string][]ColumnDef{")
+		for _, t := range rels {
+			g.P("\tRelType", t.Name, ": {")
+			for _, col := range t.Columns {
+				g.P("\t\t{Name: \"", col.Name, "\", Type: \"", col.Type, "\"},")
+			}
+			g.P("\t},")
+		}
+		g.P("}")
+		g.P()
+
+		// RelColumnNames map.
+		g.P("// RelColumnNames maps each rel type to its ordered list of column names.")
+		g.P("var RelColumnNames = map[string][]string{")
+		for _, t := range rels {
+			g.P("\tRelType", t.Name, ": {")
+			for _, col := range t.Columns {
+				g.P("\t\t\"", col.Name, "\",")
+			}
+			g.P("\t},")
 		}
 		g.P("}")
 	}
@@ -415,6 +536,30 @@ func generatePython(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) er
 	}
 	g.P("]")
 
+	// NODE_COLUMNS — all columns per node type.
+	g.P()
+	g.P("NODE_COLUMNS: Final[dict[str, list[tuple[str, str]]]] = {")
+	for _, t := range nodes {
+		g.P("    \"", t.Name, "\": [")
+		for _, col := range t.Columns {
+			g.P("        (\"", col.Name, "\", \"", col.Type, "\"),")
+		}
+		g.P("    ],")
+	}
+	g.P("}")
+	g.P()
+
+	// NODE_COLUMN_NAMES — just the name strings per node type.
+	g.P("NODE_COLUMN_NAMES: Final[dict[str, list[str]]] = {")
+	for _, t := range nodes {
+		g.P("    \"", t.Name, "\": [")
+		for _, col := range t.Columns {
+			g.P("        \"", col.Name, "\",")
+		}
+		g.P("    ],")
+	}
+	g.P("}")
+
 	// Rel DDL factory functions.
 	if len(rels) > 0 {
 		g.P()
@@ -439,6 +584,30 @@ func generatePython(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) er
 			g.P("    REL_TYPE_", toScreamingSnake(t.Name), ",")
 		}
 		g.P("]")
+		g.P()
+
+		// REL_COLUMNS — all columns per rel type.
+		g.P("REL_COLUMNS: Final[dict[str, list[tuple[str, str]]]] = {")
+		for _, t := range rels {
+			g.P("    \"", toScreamingSnake(t.Name), "\": [")
+			for _, col := range t.Columns {
+				g.P("        (\"", col.Name, "\", \"", col.Type, "\"),")
+			}
+			g.P("    ],")
+		}
+		g.P("}")
+		g.P()
+
+		// REL_COLUMN_NAMES — just the name strings per rel type.
+		g.P("REL_COLUMN_NAMES: Final[dict[str, list[str]]] = {")
+		for _, t := range rels {
+			g.P("    \"", toScreamingSnake(t.Name), "\": [")
+			for _, col := range t.Columns {
+				g.P("        \"", col.Name, "\",")
+			}
+			g.P("    ],")
+		}
+		g.P("}")
 	}
 
 	return nil

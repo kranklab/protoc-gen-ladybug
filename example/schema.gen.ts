@@ -18,6 +18,103 @@ export const NODE_TYPES = [
 
 export type NodeType = (typeof NODE_TYPES)[number];
 
+export type ColumnType =
+  | 'STRING' | 'INT32' | 'INT64' | 'UINT32' | 'UINT64'
+  | 'FLOAT' | 'DOUBLE' | 'BOOL' | 'BLOB'
+  | 'STRING[]' | 'INT32[]' | 'INT64[]' | 'UINT32[]' | 'UINT64[]'
+  | 'FLOAT[]' | 'DOUBLE[]' | 'BOOL[]' | 'BLOB[]';
+
+export interface ColumnDef {
+  readonly name: string;
+  readonly type: ColumnType;
+}
+
+export const NODE_COLUMNS: Readonly<Record<NodeType, readonly ColumnDef[]>> = {
+  File: [
+    { name: 'id', type: 'STRING' },
+    { name: 'name', type: 'STRING' },
+    { name: 'path', type: 'STRING' },
+    { name: 'language', type: 'STRING' },
+    { name: 'lines', type: 'INT32' },
+    { name: 'checksum', type: 'BLOB' },
+    { name: 'labels', type: 'STRING[]' },
+  ],
+  Function: [
+    { name: 'id', type: 'STRING' },
+    { name: 'name', type: 'STRING' },
+    { name: 'signature', type: 'STRING' },
+    { name: 'startLine', type: 'INT32' },
+    { name: 'endLine', type: 'INT32' },
+    { name: 'exported', type: 'BOOL' },
+    { name: 'complexity', type: 'INT32' },
+  ],
+  Class: [
+    { name: 'id', type: 'STRING' },
+    { name: 'name', type: 'STRING' },
+    { name: 'kind', type: 'STRING' },
+    { name: 'start_line', type: 'INT32' },
+    { name: 'end_line', type: 'INT32' },
+    { name: 'exported', type: 'BOOL' },
+    { name: 'implements', type: 'STRING[]' },
+  ],
+  Package: [
+    { name: 'id', type: 'STRING' },
+    { name: 'name', type: 'STRING' },
+    { name: 'version', type: 'STRING' },
+    { name: 'path', type: 'STRING' },
+  ],
+  Service: [
+    { name: 'id', type: 'STRING' },
+    { name: 'name', type: 'STRING' },
+    { name: 'repoUrl', type: 'STRING' },
+    { name: 'port', type: 'UINT32' },
+    { name: 'owners', type: 'STRING[]' },
+  ],
+} as const;
+
+export const NODE_COLUMN_NAMES: Readonly<Record<NodeType, readonly string[]>> = {
+  File: [
+    'id',
+    'name',
+    'path',
+    'language',
+    'lines',
+    'checksum',
+    'labels',
+  ],
+  Function: [
+    'id',
+    'name',
+    'signature',
+    'startLine',
+    'endLine',
+    'exported',
+    'complexity',
+  ],
+  Class: [
+    'id',
+    'name',
+    'kind',
+    'start_line',
+    'end_line',
+    'exported',
+    'implements',
+  ],
+  Package: [
+    'id',
+    'name',
+    'version',
+    'path',
+  ],
+  Service: [
+    'id',
+    'name',
+    'repoUrl',
+    'port',
+    'owners',
+  ],
+} as const;
+
 export const REL_SCHEMA = {
   CALLS: (from: string, to: string) =>
     `CREATE REL TABLE IF NOT EXISTS CALLS(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)`,
@@ -34,3 +131,39 @@ export const REL_TYPES = [
 ] as const;
 
 export type RelType = (typeof REL_TYPES)[number];
+
+export const REL_COLUMNS: Readonly<Record<RelType, readonly ColumnDef[]>> = {
+  CALLS: [
+    { name: 'id', type: 'STRING' },
+    { name: 'args', type: 'STRING' },
+    { name: 'confidence', type: 'FLOAT' },
+  ],
+  DEFINED_IN: [
+    { name: 'id', type: 'STRING' },
+    { name: 'startLine', type: 'INT32' },
+    { name: 'endLine', type: 'INT32' },
+  ],
+  DEPENDS_ON: [
+    { name: 'id', type: 'STRING' },
+    { name: 'version', type: 'STRING' },
+    { name: 'dev', type: 'BOOL' },
+  ],
+} as const;
+
+export const REL_COLUMN_NAMES: Readonly<Record<RelType, readonly string[]>> = {
+  CALLS: [
+    'id',
+    'args',
+    'confidence',
+  ],
+  DEFINED_IN: [
+    'id',
+    'startLine',
+    'endLine',
+  ],
+  DEPENDS_ON: [
+    'id',
+    'version',
+    'dev',
+  ],
+} as const;
