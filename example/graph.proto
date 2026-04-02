@@ -35,7 +35,7 @@ syntax = "proto3";
 
 package opentrace.example;
 
-option go_package = "github.com/opentrace/opentrace/protoc-gen-ladybug/example";
+option go_package = "github.com/kranklab/protoc-gen-ladybug/example";
 
 import "ladybug/options.proto";
 

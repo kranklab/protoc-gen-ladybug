@@ -88,7 +88,7 @@ const file_ladybug_options_proto_rawDesc = "" +
 	"\x15ladybug/options.proto\x12\aladybug\x1a google/protobuf/descriptor.proto::\n" +
 	"\x06column\x12\x1d.google.protobuf.FieldOptions\x18\xb9\x8e\x03 \x01(\tR\x06column\x88\x01\x01:C\n" +
 	"\vprimary_key\x12\x1d.google.protobuf.FieldOptions\x18\xba\x8e\x03 \x01(\bR\n" +
-	"primaryKey\x88\x01\x01B;Z9github.com/opentrace/opentrace/protoc-gen-ladybug/ladybugb\x06proto3"
+	"primaryKey\x88\x01\x01B0Z.github.com/kranklab/protoc-gen-ladybug/ladybugb\x06proto3"
 
 var file_ladybug_options_proto_goTypes = []any{
 	(*descriptorpb.FieldOptions)(nil), // 0: google.protobuf.FieldOptions

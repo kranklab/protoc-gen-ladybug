@@ -17,7 +17,7 @@ default to the proto field name, but can be overridden with the
 ## Installation
 
 ```bash
-go install github.com/opentrace/opentrace/protoc-gen-ladybug@latest
+go install github.com/kranklab/protoc-gen-ladybug@latest
 ```
 
 Or build from source:

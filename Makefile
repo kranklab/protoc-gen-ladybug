@@ -1,4 +1,4 @@
-MODULE := github.com/opentrace/opentrace/protoc-gen-ladybug
+MODULE := github.com/kranklab/protoc-gen-ladybug
 BINARY := protoc-gen-ladybug
 
 .PHONY: build test clean example proto

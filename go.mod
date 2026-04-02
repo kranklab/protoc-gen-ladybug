@@ -1,4 +1,4 @@
-module github.com/opentrace/opentrace/protoc-gen-ladybug
+module github.com/kranklab/protoc-gen-ladybug
 
 go 1.25.0
 

@@ -43,7 +43,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	"github.com/opentrace/opentrace/protoc-gen-ladybug/ladybug"
+	"github.com/kranklab/protoc-gen-ladybug/ladybug"
 )
 
 // protoKindToLadybug maps proto field kinds to LadybugDB column types.

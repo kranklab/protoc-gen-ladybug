@@ -28,7 +28,7 @@ syntax = "proto3";
 
 package ladybug;
 
-option go_package = "github.com/opentrace/opentrace/protoc-gen-ladybug/ladybug";
+option go_package = "github.com/kranklab/protoc-gen-ladybug/ladybug";
 
 import "google/protobuf/descriptor.proto";
 
