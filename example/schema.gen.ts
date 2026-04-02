@@ -167,3 +167,65 @@ export const REL_COLUMN_NAMES: Readonly<Record<RelType, readonly string[]>> = {
     'dev',
   ],
 } as const;
+
+const COLUMN_TO_PROTO: Partial<Readonly<Record<NodeType | RelType, Readonly<Record<string, string>>>>> = {
+  Function: { 'startLine': 'start_line', 'endLine': 'end_line' },
+  Service: { 'repoUrl': 'repo_url' },
+  DEFINED_IN: { 'startLine': 'start_line', 'endLine': 'end_line' },
+} as const;
+
+const PROTO_TO_COLUMN: Partial<Readonly<Record<NodeType | RelType, Readonly<Record<string, string>>>>> = {
+  Function: { 'start_line': 'startLine', 'end_line': 'endLine' },
+  Service: { 'repo_url': 'repoUrl' },
+  DEFINED_IN: { 'start_line': 'startLine', 'end_line': 'endLine' },
+} as const;
+
+/**
+ * Remap LadybugDB column names to protobuf field names.
+ *
+ * Use this when reading a row from the database and converting it to a
+ * protobuf message. Only columns with a `(ladybug.column)` override are
+ * remapped; all other keys pass through unchanged. Returns the input
+ * unchanged for types with no remapped columns.
+ *
+ * @example
+ * ```ts
+ * const row = { id: 's1', name: 'api', repoUrl: 'https://...' };
+ * const protoObj = ladybugToProto('Service', row);
+ * // { id: 's1', name: 'api', repo_url: 'https://...' }
+ * ```
+ */
+export function ladybugToProto(typeName: NodeType | RelType, row: Record<string, unknown>): Record<string, unknown> {
+  const mapping = COLUMN_TO_PROTO[typeName];
+  if (!mapping) return row;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    result[mapping[key] ?? key] = value;
+  }
+  return result;
+}
+
+/**
+ * Remap protobuf field names to LadybugDB column names.
+ *
+ * Use this when converting a protobuf message (or its dict representation)
+ * to a row suitable for writing to the database. Only fields with a
+ * `(ladybug.column)` override are remapped; all other keys pass through
+ * unchanged. Returns the input unchanged for types with no remapped columns.
+ *
+ * @example
+ * ```ts
+ * const obj = { id: 's1', name: 'api', repo_url: 'https://...' };
+ * const row = protoToLadybug('Service', obj);
+ * // { id: 's1', name: 'api', repoUrl: 'https://...' }
+ * ```
+ */
+export function protoToLadybug(typeName: NodeType | RelType, obj: Record<string, unknown>): Record<string, unknown> {
+  const mapping = PROTO_TO_COLUMN[typeName];
+  if (!mapping) return obj;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[mapping[key] ?? key] = value;
+  }
+  return result;
+}

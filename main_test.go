@@ -56,12 +56,12 @@ func TestBuildDDL(t *testing.T) {
 	table := nodeTable{
 		Name: "File",
 		Columns: []column{
-			{"id", "STRING", true},
-			{"name", "STRING", false},
-			{"path", "STRING", false},
-			{"language", "STRING", false},
-			{"start_line", "INT32", false},
-			{"labels", "STRING[]", false},
+			{Name: "id", Type: "STRING", PrimaryKey: true},
+			{Name: "name", Type: "STRING"},
+			{Name: "path", Type: "STRING"},
+			{Name: "language", Type: "STRING"},
+			{Name: "start_line", Type: "INT32"},
+			{Name: "labels", Type: "STRING[]"},
 		},
 	}
 	got := buildDDL(table)
@@ -75,7 +75,7 @@ func TestBuildDDL_SingleColumn(t *testing.T) {
 	table := nodeTable{
 		Name: "Simple",
 		Columns: []column{
-			{"id", "STRING", true},
+			{Name: "id", Type: "STRING", PrimaryKey: true},
 		},
 	}
 	got := buildDDL(table)
@@ -89,9 +89,9 @@ func TestBuildDDL_ExplicitPrimaryKey(t *testing.T) {
 	table := nodeTable{
 		Name: "Event",
 		Columns: []column{
-			{"name", "STRING", false},
-			{"timestamp", "INT64", false},
-			{"event_id", "STRING", true},
+			{Name: "name", Type: "STRING"},
+			{Name: "timestamp", Type: "INT64"},
+			{Name: "event_id", Type: "STRING", PrimaryKey: true},
 		},
 	}
 	got := buildDDL(table)
@@ -148,9 +148,9 @@ func TestBuildRelDDLTemplate(t *testing.T) {
 	table := relTable{
 		Name: "Calls",
 		Columns: []column{
-			{"id", "STRING", false},
-			{"args", "STRING", false},
-			{"confidence", "FLOAT", false},
+			{Name: "id", Type: "STRING"},
+			{Name: "args", Type: "STRING"},
+			{Name: "confidence", Type: "FLOAT"},
 		},
 	}
 	got := buildRelDDLTemplate(table, "${from}", "${to}")
@@ -164,9 +164,9 @@ func TestBuildRelDDLTemplate_GoFormat(t *testing.T) {
 	table := relTable{
 		Name: "DefinedIn",
 		Columns: []column{
-			{"id", "STRING", false},
-			{"start_line", "INT32", false},
-			{"end_line", "INT32", false},
+			{Name: "id", Type: "STRING"},
+			{Name: "start_line", Type: "INT32"},
+			{Name: "end_line", Type: "INT32"},
 		},
 	}
 	got := buildRelDDLTemplate(table, "%s", "%s")
