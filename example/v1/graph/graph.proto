@@ -16,26 +16,16 @@
 //
 // Any message whose name ends in "Node" will be picked up by
 // protoc-gen-ladybug and converted into a CREATE NODE TABLE statement.
+// Messages ending in "Rel" become REL TABLE factory functions.
 //
-// Usage:
-//
-//   # TypeScript (default)
-//   protoc --ladybug_out=. example/graph.proto
-//
-//   # Go
-//   protoc --ladybug_out=. --ladybug_opt=lang=go example/graph.proto
-//
-//   # Python
-//   protoc --ladybug_out=. --ladybug_opt=lang=py example/graph.proto
-//
-//   # Cypher DDL
-//   protoc --ladybug_out=. --ladybug_opt=lang=cypher example/graph.proto
+// This file lives in its own package (v1/graph) and produces a schema
+// file alongside it: example/v1/graph/schema.gen.{go,ts}, etc.
 
 syntax = "proto3";
 
-package opentrace.example;
+package opentrace.example.v1.graph;
 
-option go_package = "github.com/kranklab/protoc-gen-ladybug/example";
+option go_package = "github.com/kranklab/protoc-gen-ladybug/example/v1/graph";
 
 import "ladybug/options.proto";
 
