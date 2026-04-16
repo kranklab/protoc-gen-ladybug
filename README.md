@@ -33,31 +33,39 @@ that `protoc` can discover it.
 
 ```bash
 # Emit TypeScript (default)
-protoc --ladybug_out=./gen graph.proto
+protoc --ladybug_out=. graph.proto
 
 # Emit Go
-protoc --ladybug_out=./gen --ladybug_opt=lang=go graph.proto
+protoc --ladybug_out=. --ladybug_opt=lang=go graph.proto
 
 # Emit Python
-protoc --ladybug_out=./gen --ladybug_opt=lang=py graph.proto
+protoc --ladybug_out=. --ladybug_opt=lang=py graph.proto
 
 # Emit raw Cypher DDL
-protoc --ladybug_out=./gen --ladybug_opt=lang=cypher graph.proto
+protoc --ladybug_out=. --ladybug_opt=lang=cypher graph.proto
 ```
+
+Output files are written alongside each input `.proto` file, one schema per
+source directory. Multiple protos in the same directory aggregate into a
+single schema; protos in different directories produce separate schemas.
 
 ### Output formats
 
 | Option | Output file | Description |
 |---|---|---|
-| `lang=ts` (default) | `schema.gen.ts` | TypeScript module with node DDL arrays, rel DDL factory functions, and union types |
-| `lang=go` | `schema.gen.go` | Go package with node DDL slices, rel DDL factory functions, and typed constants |
-| `lang=py` | `schema_gen.py` | Python module with node DDL lists, rel DDL factory functions, and typed constants |
-| `lang=cypher` | `schema.cypher` | Plain Cypher DDL statements (rel tables as commented templates) |
+| `lang=ts` (default) | `<dir>/schema.gen.ts` | TypeScript module with node DDL arrays, rel DDL factory functions, and union types |
+| `lang=go` | `<dir>/schema.gen.go` | Go package with node DDL slices, rel DDL factory functions, and typed constants. The `package` declaration uses the proto's `go_package` short name. |
+| `lang=py` | `<dir>/schema_gen.py` | Python module with node DDL lists, rel DDL factory functions, and typed constants |
+| `lang=cypher` | `<dir>/schema.cypher` | Plain Cypher DDL statements (rel tables as commented templates) |
 
 ## Example
 
-A full example is provided in [`example/graph.proto`](example/graph.proto),
-which defines node and relationship types for a code-analysis knowledge graph.
+Full examples are provided under [`example/v1/`](example/v1/). Two separate
+packages — [`example/v1/graph/graph.proto`](example/v1/graph/graph.proto) and
+[`example/v1/commits/commits.proto`](example/v1/commits/commits.proto) —
+demonstrate how protos in different directories produce separate schema
+files (`example/v1/graph/schema.gen.go`, `example/v1/commits/schema.gen.go`,
+etc.), each in its own Go package.
 
 Given proto definitions like:
 

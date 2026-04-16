@@ -36,6 +36,8 @@ package main
 
 import (
 	"fmt"
+	"path"
+	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -116,40 +118,35 @@ type column struct {
 	PrimaryKey bool
 }
 
-// extractNodeTables finds all messages ending in "Node" and converts them
-// to nodeTable definitions.
-func extractNodeTables(gen *protogen.Plugin) []nodeTable {
+// extractNodeTablesFromFile finds all messages ending in "Node" in a single
+// proto file and converts them to nodeTable definitions.
+func extractNodeTablesFromFile(f *protogen.File) []nodeTable {
 	var tables []nodeTable
-	for _, f := range gen.Files {
-		if !f.Generate {
+	for _, msg := range f.Messages {
+		name := string(msg.Desc.Name())
+		if !strings.HasSuffix(name, "Node") {
 			continue
 		}
-		for _, msg := range f.Messages {
-			name := string(msg.Desc.Name())
-			if !strings.HasSuffix(name, "Node") {
-				continue
+		tableName := strings.TrimSuffix(name, "Node")
+		var cols []column
+		hasExplicitPK := false
+		for _, field := range msg.Fields {
+			pk := isPrimaryKey(field)
+			if pk {
+				hasExplicitPK = true
 			}
-			tableName := strings.TrimSuffix(name, "Node")
-			var cols []column
-			hasExplicitPK := false
-			for _, field := range msg.Fields {
-				pk := isPrimaryKey(field)
-				if pk {
-					hasExplicitPK = true
-				}
-				cols = append(cols, column{
-					Name:       columnName(field),
-					ProtoName:  string(field.Desc.Name()),
-					Type:       protoKindToLadybug(field),
-					PrimaryKey: pk,
-				})
-			}
-			// Default: first field is primary key if none explicitly marked.
-			if !hasExplicitPK && len(cols) > 0 {
-				cols[0].PrimaryKey = true
-			}
-			tables = append(tables, nodeTable{Name: tableName, Columns: cols})
+			cols = append(cols, column{
+				Name:       columnName(field),
+				ProtoName:  string(field.Desc.Name()),
+				Type:       protoKindToLadybug(field),
+				PrimaryKey: pk,
+			})
 		}
+		// Default: first field is primary key if none explicitly marked.
+		if !hasExplicitPK && len(cols) > 0 {
+			cols[0].PrimaryKey = true
+		}
+		tables = append(tables, nodeTable{Name: tableName, Columns: cols})
 	}
 	return tables
 }
@@ -169,35 +166,30 @@ var relImplicitFields = map[string]bool{
 	"target_id": true,
 }
 
-// extractRelTables finds all messages ending in "Rel" and converts them
-// to relTable definitions. Fields named "source_id" and "target_id" are
-// excluded from the column list.
-func extractRelTables(gen *protogen.Plugin) []relTable {
+// extractRelTablesFromFile finds all messages ending in "Rel" in a single
+// proto file and converts them to relTable definitions. Fields named
+// "source_id" and "target_id" are excluded from the column list.
+func extractRelTablesFromFile(f *protogen.File) []relTable {
 	var tables []relTable
-	for _, f := range gen.Files {
-		if !f.Generate {
+	for _, msg := range f.Messages {
+		name := string(msg.Desc.Name())
+		if !strings.HasSuffix(name, "Rel") {
 			continue
 		}
-		for _, msg := range f.Messages {
-			name := string(msg.Desc.Name())
-			if !strings.HasSuffix(name, "Rel") {
+		tableName := strings.TrimSuffix(name, "Rel")
+		var cols []column
+		for _, field := range msg.Fields {
+			protoName := string(field.Desc.Name())
+			if relImplicitFields[protoName] {
 				continue
 			}
-			tableName := strings.TrimSuffix(name, "Rel")
-			var cols []column
-			for _, field := range msg.Fields {
-				protoName := string(field.Desc.Name())
-				if relImplicitFields[protoName] {
-					continue
-				}
-				cols = append(cols, column{
-					Name:      columnName(field),
-					ProtoName: string(field.Desc.Name()),
-					Type:      protoKindToLadybug(field),
-				})
-			}
-			tables = append(tables, relTable{Name: tableName, Columns: cols})
+			cols = append(cols, column{
+				Name:      columnName(field),
+				ProtoName: string(field.Desc.Name()),
+				Type:      protoKindToLadybug(field),
+			})
 		}
+		tables = append(tables, relTable{Name: tableName, Columns: cols})
 	}
 	return tables
 }
@@ -228,14 +220,17 @@ func buildDDL(t nodeTable) string {
 	return fmt.Sprintf("CREATE NODE TABLE IF NOT EXISTS %s(%s)", t.Name, strings.Join(parts, ", "))
 }
 
+// fileGroup aggregates Node/Rel tables extracted from all input proto files
+// sharing a source directory. Each group yields one generated schema file.
+type fileGroup struct {
+	dir       string
+	goPackage string
+	nodes     []nodeTable
+	rels      []relTable
+}
+
 func main() {
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
-		nodes := extractNodeTables(gen)
-		rels := extractRelTables(gen)
-		if len(nodes) == 0 && len(rels) == 0 {
-			return nil
-		}
-
 		// Determine output language from plugin parameter.
 		lang := "ts"
 		for _, p := range strings.Split(gen.Request.GetParameter(), ",") {
@@ -245,21 +240,54 @@ func main() {
 			}
 		}
 
-		switch lang {
-		case "cypher":
-			return generateCypher(gen, nodes, rels)
-		case "go":
-			return generateGo(gen, nodes, rels)
-		case "py":
-			return generatePython(gen, nodes, rels)
-		default:
-			return generateTS(gen, nodes, rels)
+		// Group input proto files by source directory. Protos in the same
+		// directory aggregate into one schema; protos in different
+		// directories produce separate schema files.
+		groups := make(map[string]*fileGroup)
+		var dirs []string
+		for _, f := range gen.Files {
+			if !f.Generate {
+				continue
+			}
+			dir := path.Dir(string(f.Desc.Path()))
+			grp, ok := groups[dir]
+			if !ok {
+				grp = &fileGroup{dir: dir, goPackage: string(f.GoPackageName)}
+				groups[dir] = grp
+				dirs = append(dirs, dir)
+			}
+			grp.nodes = append(grp.nodes, extractNodeTablesFromFile(f)...)
+			grp.rels = append(grp.rels, extractRelTablesFromFile(f)...)
 		}
+		sort.Strings(dirs)
+
+		for _, dir := range dirs {
+			grp := groups[dir]
+			if len(grp.nodes) == 0 && len(grp.rels) == 0 {
+				continue
+			}
+			var err error
+			switch lang {
+			case "cypher":
+				err = generateCypher(gen, grp)
+			case "go":
+				err = generateGo(gen, grp)
+			case "py":
+				err = generatePython(gen, grp)
+			default:
+				err = generateTS(gen, grp)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
-func generateCypher(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error {
-	g := gen.NewGeneratedFile("schema.cypher", "")
+func generateCypher(gen *protogen.Plugin, grp *fileGroup) error {
+	nodes, rels := grp.nodes, grp.rels
+	g := gen.NewGeneratedFile(path.Join(grp.dir, "schema.cypher"), "")
 	g.P("// Auto-generated by protoc-gen-ladybug — do not edit.")
 	g.P()
 	g.P("// Node tables")
@@ -277,8 +305,9 @@ func generateCypher(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) er
 	return nil
 }
 
-func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error {
-	g := gen.NewGeneratedFile("schema.gen.ts", "")
+func generateTS(gen *protogen.Plugin, grp *fileGroup) error {
+	nodes, rels := grp.nodes, grp.rels
+	g := gen.NewGeneratedFile(path.Join(grp.dir, "schema.gen.ts"), "")
 	g.P("// Auto-generated by protoc-gen-ladybug — do not edit.")
 	g.P()
 
@@ -478,11 +507,16 @@ func generateTS(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 	return nil
 }
 
-func generateGo(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error {
-	g := gen.NewGeneratedFile("schema.gen.go", "")
+func generateGo(gen *protogen.Plugin, grp *fileGroup) error {
+	nodes, rels := grp.nodes, grp.rels
+	pkg := grp.goPackage
+	if pkg == "" {
+		pkg = "schema"
+	}
+	g := gen.NewGeneratedFile(path.Join(grp.dir, "schema.gen.go"), "")
 	g.P("// Code generated by protoc-gen-ladybug. DO NOT EDIT.")
 	g.P()
-	g.P("package schema")
+	g.P("package ", pkg)
 	g.P()
 
 	needsFmt := len(rels) > 0
@@ -697,8 +731,9 @@ func generateGo(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error 
 	return nil
 }
 
-func generatePython(gen *protogen.Plugin, nodes []nodeTable, rels []relTable) error {
-	g := gen.NewGeneratedFile("schema_gen.py", "")
+func generatePython(gen *protogen.Plugin, grp *fileGroup) error {
+	nodes, rels := grp.nodes, grp.rels
+	g := gen.NewGeneratedFile(path.Join(grp.dir, "schema_gen.py"), "")
 	g.P("# Auto-generated by protoc-gen-ladybug — do not edit.")
 	g.P()
 	g.P("from typing import Final, Literal")

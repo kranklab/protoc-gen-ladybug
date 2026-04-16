@@ -1,0 +1,67 @@
+// Copyright 2026 OpenTrace Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// A second example proto file in its own package (v1/commits),
+// demonstrating that protoc-gen-ladybug emits one schema per directory.
+//
+// Running:
+//
+//   protoc --plugin=./protoc-gen-ladybug --ladybug_out=. \
+//     --ladybug_opt=lang=go \
+//     -I proto -I . \
+//     example/v1/graph/graph.proto example/v1/commits/commits.proto
+//
+// produces two separate schema files:
+//   example/v1/graph/schema.gen.go    (package graph)
+//   example/v1/commits/schema.gen.go  (package commits)
+//
+// Protos sharing a directory would still aggregate into a single schema.
+
+syntax = "proto3";
+
+package opentrace.example.v1.commits;
+
+option go_package = "github.com/kranklab/protoc-gen-ladybug/example/v1/commits";
+
+import "ladybug/options.proto";
+
+// CommitNode represents a single git commit.
+message CommitNode {
+  string sha        = 1 [(ladybug.primary_key) = true];
+  string message    = 2;
+  int64  timestamp  = 3;
+  string author_email = 4 [(ladybug.column) = "authorEmail"];
+}
+
+// AuthorNode represents a person who has authored commits.
+message AuthorNode {
+  string email = 1;
+  string name  = 2;
+}
+
+// AuthoredRel connects an Author to a Commit they authored.
+message AuthoredRel {
+  string id        = 1;
+  string source_id = 2;
+  string target_id = 3;
+}
+
+// ModifiesRel connects a Commit to a File it touched.
+message ModifiesRel {
+  string id        = 1;
+  string source_id = 2;
+  string target_id = 3;
+  int32  additions = 4;
+  int32  deletions = 5;
+}
