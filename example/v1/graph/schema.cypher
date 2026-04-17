@@ -7,8 +7,12 @@ CREATE NODE TABLE IF NOT EXISTS Class(id STRING PRIMARY KEY, name STRING, kind S
 CREATE NODE TABLE IF NOT EXISTS Package(id STRING, name STRING, version STRING, path STRING PRIMARY KEY);
 CREATE NODE TABLE IF NOT EXISTS Service(id STRING PRIMARY KEY, name STRING, repoUrl STRING, port UINT32, owners STRING[]);
 
-// Rel tables — replace %s placeholders with node table names:
-//   e.g. CREATE REL TABLE IF NOT EXISTS Calls(FROM Function TO Function, ...)
-// CREATE REL TABLE IF NOT EXISTS CALLS(FROM %s TO %s, id STRING, args STRING, confidence FLOAT);
-// CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM %s TO %s, id STRING, startLine INT32, endLine INT32);
-// CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(FROM %s TO %s, id STRING, version STRING, dev BOOL);
+// Rel tables — replace <pairs> with one or more comma-separated
+// "FROM <NodeType> TO <NodeType>" clauses declaring every node-type
+// pair the rel spans. Ladybug requires all pairs to be declared in the
+// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+// NOT EXISTS calls for the same label are silent no-ops.
+//   e.g. CREATE REL TABLE IF NOT EXISTS EMITS(FROM Service TO LogEvent, FROM Service TO Metric, ...)
+// CREATE REL TABLE IF NOT EXISTS CALLS(<pairs>, id STRING, args STRING, confidence FLOAT);
+// CREATE REL TABLE IF NOT EXISTS DEFINED_IN(<pairs>, id STRING, startLine INT32, endLine INT32);
+// CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(<pairs>, id STRING, version STRING, dev BOOL);

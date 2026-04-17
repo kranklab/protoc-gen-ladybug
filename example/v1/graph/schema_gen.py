@@ -113,19 +113,44 @@ NODE_COLUMN_NAMES: Final[dict[NodeType, list[str]]] = {
 }
 
 
-def rel_schema_calls(from_node: str, to_node: str) -> str:
-    """Return the CREATE REL TABLE DDL for Calls relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS CALLS(FROM {from_node} TO {to_node}, id STRING, args STRING, confidence FLOAT)"
+# A (from_node, to_node) pair for a relationship table.
+#
+# Ladybug requires every pair a rel label spans to be declared in the
+# initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+# NOT EXISTS calls for the same label are silent no-ops. Pass every
+# pair the label needs in a single rel_schema_* call.
+RelPair = tuple[str, str]
 
 
-def rel_schema_defined_in(from_node: str, to_node: str) -> str:
-    """Return the CREATE REL TABLE DDL for DefinedIn relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM {from_node} TO {to_node}, id STRING, startLine INT32, endLine INT32)"
+def _join_rel_pairs(pairs: list[RelPair]) -> str:
+    return ", ".join(f"FROM {p[0]} TO {p[1]}" for p in pairs)
 
 
-def rel_schema_depends_on(from_node: str, to_node: str) -> str:
-    """Return the CREATE REL TABLE DDL for DependsOn relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(FROM {from_node} TO {to_node}, id STRING, version STRING, dev BOOL)"
+def rel_schema_calls(pairs: list[RelPair]) -> str:
+    """Return the CREATE REL TABLE DDL for Calls relationships.
+
+    Pass every (from, to) pair the CALLS label needs in a single call;
+    all pairs must be declared in the initial CREATE REL TABLE statement.
+    """
+    return f"CREATE REL TABLE IF NOT EXISTS CALLS({_join_rel_pairs(pairs)}, id STRING, args STRING, confidence FLOAT)"
+
+
+def rel_schema_defined_in(pairs: list[RelPair]) -> str:
+    """Return the CREATE REL TABLE DDL for DefinedIn relationships.
+
+    Pass every (from, to) pair the DEFINED_IN label needs in a single call;
+    all pairs must be declared in the initial CREATE REL TABLE statement.
+    """
+    return f"CREATE REL TABLE IF NOT EXISTS DEFINED_IN({_join_rel_pairs(pairs)}, id STRING, startLine INT32, endLine INT32)"
+
+
+def rel_schema_depends_on(pairs: list[RelPair]) -> str:
+    """Return the CREATE REL TABLE DDL for DependsOn relationships.
+
+    Pass every (from, to) pair the DEPENDS_ON label needs in a single call;
+    all pairs must be declared in the initial CREATE REL TABLE statement.
+    """
+    return f"CREATE REL TABLE IF NOT EXISTS DEPENDS_ON({_join_rel_pairs(pairs)}, id STRING, version STRING, dev BOOL)"
 
 
 REL_TYPE_CALLS: Final[str] = "CALLS"

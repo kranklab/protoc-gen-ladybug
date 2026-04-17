@@ -83,12 +83,25 @@ message ServiceNode {
 
 // --- Relationship messages ------------------------------------------------
 //
-// Messages ending in "Rel" become REL TABLE factory functions.
-// The fields "source_id" and "target_id" are excluded from the DDL
-// columns — they are implicit in the FROM/TO clause which the consumer
-// supplies at call time.
+// Messages ending in "Rel" become REL TABLE factory functions. The fields
+// "source_id" and "target_id" are excluded from the DDL columns — they are
+// implicit in the FROM/TO clause(s) which the caller supplies at call time.
+//
+// Each generated factory takes a list of (FROM, TO) pairs. Ladybug requires
+// every pair a rel label spans to be declared in the initial CREATE REL
+// TABLE statement; subsequent CREATE REL TABLE IF NOT EXISTS calls for the
+// same label are silent no-ops. The proto itself does not declare the pair
+// set — callers know which pairs their schema uses and pass them at runtime.
 
-// CallsRel represents a function-calls-function relationship.
+// CallsRel represents a call-site relationship. The CALLS label typically
+// spans several (FROM, TO) pairs — a Function can call a Function, and a
+// Class's constructor can call a Function — so callers invoke the factory
+// with every pair the label needs:
+//
+//   schema.RelSchemaCalls(
+//     schema.RelPair{From: "Function", To: "Function"},
+//     schema.RelPair{From: "Class",    To: "Function"},
+//   )
 message CallsRel {
   string id         = 1;
   string source_id  = 2;
@@ -97,7 +110,9 @@ message CallsRel {
   float  confidence = 5;
 }
 
-// DefinedInRel represents a symbol-defined-in-file relationship.
+// DefinedInRel represents a symbol-defined-in-file relationship. The
+// DEFINED_IN label spans Function→File and Class→File, so the factory is
+// called with both pairs in one invocation.
 message DefinedInRel {
   string id         = 1;
   string source_id  = 2;
@@ -107,6 +122,7 @@ message DefinedInRel {
 }
 
 // DependsOnRel represents a package-depends-on-package relationship.
+// Single-pair rels are still valid — the variadic factory accepts one pair.
 message DependsOnRel {
   string id         = 1;
   string source_id  = 2;

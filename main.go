@@ -194,12 +194,20 @@ func extractRelTablesFromFile(f *protogen.File) []relTable {
 	return tables
 }
 
-// buildRelDDLTemplate generates a CREATE REL TABLE statement template with
-// placeholders for FROM and TO node types. The placeholder format is
-// determined by the target language.
-func buildRelDDLTemplate(t relTable, fromPlaceholder, toPlaceholder string) string {
-	var parts []string
-	parts = append(parts, fmt.Sprintf("FROM %s TO %s", fromPlaceholder, toPlaceholder))
+// buildRelDDLTemplate generates a CREATE REL TABLE statement template with a
+// single placeholder where the (FROM, TO) pair clauses go. The placeholder
+// format is determined by the target language — e.g. "%s" for Go
+// fmt.Sprintf, "${joinRelPairs(pairs)}" for a TypeScript template literal,
+// "{_join_rel_pairs(pairs)}" for a Python f-string, "<pairs>" for
+// documented Cypher.
+//
+// Ladybug requires every (FROM, TO) pair for a rel label to be declared in
+// the initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+// NOT EXISTS calls for an existing label are silent no-ops. The generated
+// factory therefore accepts a list of pairs and expands them inline into a
+// single DDL statement.
+func buildRelDDLTemplate(t relTable, pairsPlaceholder string) string {
+	parts := []string{pairsPlaceholder}
 	for _, col := range t.Columns {
 		parts = append(parts, fmt.Sprintf("%s %s", col.Name, col.Type))
 	}
@@ -296,10 +304,14 @@ func generateCypher(gen *protogen.Plugin, grp *fileGroup) error {
 	}
 	if len(rels) > 0 {
 		g.P()
-		g.P("// Rel tables — replace %s placeholders with node table names:")
-		g.P("//   e.g. CREATE REL TABLE IF NOT EXISTS Calls(FROM Function TO Function, ...)")
+		g.P("// Rel tables — replace <pairs> with one or more comma-separated")
+		g.P("// \"FROM <NodeType> TO <NodeType>\" clauses declaring every node-type")
+		g.P("// pair the rel spans. Ladybug requires all pairs to be declared in the")
+		g.P("// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF")
+		g.P("// NOT EXISTS calls for the same label are silent no-ops.")
+		g.P("//   e.g. CREATE REL TABLE IF NOT EXISTS EMITS(FROM Service TO LogEvent, FROM Service TO Metric, ...)")
 		for _, t := range rels {
-			g.P("// ", buildRelDDLTemplate(t, "%s", "%s"), ";")
+			g.P("// ", buildRelDDLTemplate(t, "<pairs>"), ";")
 		}
 	}
 	return nil
@@ -368,10 +380,27 @@ func generateTS(gen *protogen.Plugin, grp *fileGroup) error {
 	// Rel DDL factory functions.
 	if len(rels) > 0 {
 		g.P()
+		g.P("/**")
+		g.P(" * A (FROM, TO) node-type pair for a relationship table.")
+		g.P(" *")
+		g.P(" * Ladybug requires every pair a rel label spans to be declared in the")
+		g.P(" * initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF")
+		g.P(" * NOT EXISTS calls for the same label are silent no-ops. Pass every")
+		g.P(" * pair the label needs in a single REL_SCHEMA call.")
+		g.P(" */")
+		g.P("export interface RelPair {")
+		g.P("  readonly from: string;")
+		g.P("  readonly to: string;")
+		g.P("}")
+		g.P()
+		g.P("function joinRelPairs(pairs: ReadonlyArray<RelPair>): string {")
+		g.P("  return pairs.map(p => `FROM ${p.from} TO ${p.to}`).join(', ');")
+		g.P("}")
+		g.P()
 		g.P("export const REL_SCHEMA = {")
 		for _, t := range rels {
-			g.P("  ", toScreamingSnake(t.Name), ": (from: string, to: string) =>")
-			g.P("    `", buildRelDDLTemplate(t, "${from}", "${to}"), "`,")
+			g.P("  ", toScreamingSnake(t.Name), ": (pairs: ReadonlyArray<RelPair>) =>")
+			g.P("    `", buildRelDDLTemplate(t, "${joinRelPairs(pairs)}"), "`,")
 		}
 		g.P("} as const;")
 		g.P()
@@ -519,9 +548,11 @@ func generateGo(gen *protogen.Plugin, grp *fileGroup) error {
 	g.P("package ", pkg)
 	g.P()
 
-	needsFmt := len(rels) > 0
-	if needsFmt {
-		g.P("import \"fmt\"")
+	if len(rels) > 0 {
+		g.P("import (")
+		g.P("\t\"fmt\"")
+		g.P("\t\"strings\"")
+		g.P(")")
 		g.P()
 	}
 
@@ -591,10 +622,34 @@ func generateGo(gen *protogen.Plugin, grp *fileGroup) error {
 	// Rel DDL factory functions.
 	if len(rels) > 0 {
 		g.P()
+		g.P("// RelPair identifies a (FROM, TO) node-type pair for a relationship table.")
+		g.P("//")
+		g.P("// Ladybug requires every pair a rel label spans to be declared in the")
+		g.P("// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF")
+		g.P("// NOT EXISTS calls for the same label are silent no-ops. Pass every")
+		g.P("// pair the label needs in a single RelSchema<Name> call.")
+		g.P("type RelPair struct {")
+		g.P("\tFrom string")
+		g.P("\tTo   string")
+		g.P("}")
+		g.P()
+		g.P("// joinRelPairs renders a slice of RelPairs as a comma-separated list of")
+		g.P("// \"FROM X TO Y\" clauses suitable for the body of a CREATE REL TABLE.")
+		g.P("func joinRelPairs(pairs []RelPair) string {")
+		g.P("\tparts := make([]string, 0, len(pairs))")
+		g.P("\tfor _, p := range pairs {")
+		g.P("\t\tparts = append(parts, fmt.Sprintf(\"FROM %s TO %s\", p.From, p.To))")
+		g.P("\t}")
+		g.P("\treturn strings.Join(parts, \", \")")
+		g.P("}")
+		g.P()
 		for _, t := range rels {
 			g.P("// RelSchema", t.Name, " returns the CREATE REL TABLE DDL for ", t.Name, " relationships.")
-			g.P("func RelSchema", t.Name, "(from, to string) string {")
-			g.P("\treturn fmt.Sprintf(`", buildRelDDLTemplate(t, "%s", "%s"), "`, from, to)")
+			g.P("//")
+			g.P("// Pass every (FROM, TO) pair the ", toScreamingSnake(t.Name), " label needs in a single call; all")
+			g.P("// pairs must be declared in the initial CREATE REL TABLE statement.")
+			g.P("func RelSchema", t.Name, "(pairs ...RelPair) string {")
+			g.P("\treturn fmt.Sprintf(`", buildRelDDLTemplate(t, "%s"), "`, joinRelPairs(pairs))")
 			g.P("}")
 		}
 		g.P()
@@ -798,10 +853,27 @@ func generatePython(gen *protogen.Plugin, grp *fileGroup) error {
 	if len(rels) > 0 {
 		g.P()
 		g.P()
+		g.P("# A (from_node, to_node) pair for a relationship table.")
+		g.P("#")
+		g.P("# Ladybug requires every pair a rel label spans to be declared in the")
+		g.P("# initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF")
+		g.P("# NOT EXISTS calls for the same label are silent no-ops. Pass every")
+		g.P("# pair the label needs in a single rel_schema_* call.")
+		g.P("RelPair = tuple[str, str]")
+		g.P()
+		g.P()
+		g.P("def _join_rel_pairs(pairs: list[RelPair]) -> str:")
+		g.P("    return \", \".join(f\"FROM {p[0]} TO {p[1]}\" for p in pairs)")
+		g.P()
+		g.P()
 		for _, t := range rels {
-			g.P("def rel_schema_", toSnake(t.Name), "(from_node: str, to_node: str) -> str:")
-			g.P("    \"\"\"Return the CREATE REL TABLE DDL for ", t.Name, " relationships.\"\"\"")
-			g.P("    return f\"", buildRelDDLTemplate(t, "{from_node}", "{to_node}"), "\"")
+			g.P("def rel_schema_", toSnake(t.Name), "(pairs: list[RelPair]) -> str:")
+			g.P("    \"\"\"Return the CREATE REL TABLE DDL for ", t.Name, " relationships.")
+			g.P()
+			g.P("    Pass every (from, to) pair the ", toScreamingSnake(t.Name), " label needs in a single call;")
+			g.P("    all pairs must be declared in the initial CREATE REL TABLE statement.")
+			g.P("    \"\"\"")
+			g.P("    return f\"", buildRelDDLTemplate(t, "{_join_rel_pairs(pairs)}"), "\"")
 			g.P()
 			g.P()
 		}

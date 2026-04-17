@@ -115,13 +115,30 @@ export const NODE_COLUMN_NAMES: Readonly<Record<NodeType, readonly string[]>> = 
   ],
 } as const;
 
+/**
+ * A (FROM, TO) node-type pair for a relationship table.
+ *
+ * Ladybug requires every pair a rel label spans to be declared in the
+ * initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+ * NOT EXISTS calls for the same label are silent no-ops. Pass every
+ * pair the label needs in a single REL_SCHEMA call.
+ */
+export interface RelPair {
+  readonly from: string;
+  readonly to: string;
+}
+
+function joinRelPairs(pairs: ReadonlyArray<RelPair>): string {
+  return pairs.map(p => `FROM ${p.from} TO ${p.to}`).join(', ');
+}
+
 export const REL_SCHEMA = {
-  CALLS: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS CALLS(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)`,
-  DEFINED_IN: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM ${from} TO ${to}, id STRING, startLine INT32, endLine INT32)`,
-  DEPENDS_ON: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(FROM ${from} TO ${to}, id STRING, version STRING, dev BOOL)`,
+  CALLS: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS CALLS(${joinRelPairs(pairs)}, id STRING, args STRING, confidence FLOAT)`,
+  DEFINED_IN: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS DEFINED_IN(${joinRelPairs(pairs)}, id STRING, startLine INT32, endLine INT32)`,
+  DEPENDS_ON: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(${joinRelPairs(pairs)}, id STRING, version STRING, dev BOOL)`,
 } as const;
 
 export const REL_TYPES = [

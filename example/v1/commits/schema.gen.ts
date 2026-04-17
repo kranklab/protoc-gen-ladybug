@@ -49,11 +49,28 @@ export const NODE_COLUMN_NAMES: Readonly<Record<NodeType, readonly string[]>> = 
   ],
 } as const;
 
+/**
+ * A (FROM, TO) node-type pair for a relationship table.
+ *
+ * Ladybug requires every pair a rel label spans to be declared in the
+ * initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+ * NOT EXISTS calls for the same label are silent no-ops. Pass every
+ * pair the label needs in a single REL_SCHEMA call.
+ */
+export interface RelPair {
+  readonly from: string;
+  readonly to: string;
+}
+
+function joinRelPairs(pairs: ReadonlyArray<RelPair>): string {
+  return pairs.map(p => `FROM ${p.from} TO ${p.to}`).join(', ');
+}
+
 export const REL_SCHEMA = {
-  AUTHORED: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS AUTHORED(FROM ${from} TO ${to}, id STRING)`,
-  MODIFIES: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS MODIFIES(FROM ${from} TO ${to}, id STRING, additions INT32, deletions INT32)`,
+  AUTHORED: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS AUTHORED(${joinRelPairs(pairs)}, id STRING)`,
+  MODIFIES: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS MODIFIES(${joinRelPairs(pairs)}, id STRING, additions INT32, deletions INT32)`,
 } as const;
 
 export const REL_TYPES = [

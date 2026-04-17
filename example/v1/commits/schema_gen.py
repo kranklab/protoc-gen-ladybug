@@ -44,14 +44,35 @@ NODE_COLUMN_NAMES: Final[dict[NodeType, list[str]]] = {
 }
 
 
-def rel_schema_authored(from_node: str, to_node: str) -> str:
-    """Return the CREATE REL TABLE DDL for Authored relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS AUTHORED(FROM {from_node} TO {to_node}, id STRING)"
+# A (from_node, to_node) pair for a relationship table.
+#
+# Ladybug requires every pair a rel label spans to be declared in the
+# initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+# NOT EXISTS calls for the same label are silent no-ops. Pass every
+# pair the label needs in a single rel_schema_* call.
+RelPair = tuple[str, str]
 
 
-def rel_schema_modifies(from_node: str, to_node: str) -> str:
-    """Return the CREATE REL TABLE DDL for Modifies relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS MODIFIES(FROM {from_node} TO {to_node}, id STRING, additions INT32, deletions INT32)"
+def _join_rel_pairs(pairs: list[RelPair]) -> str:
+    return ", ".join(f"FROM {p[0]} TO {p[1]}" for p in pairs)
+
+
+def rel_schema_authored(pairs: list[RelPair]) -> str:
+    """Return the CREATE REL TABLE DDL for Authored relationships.
+
+    Pass every (from, to) pair the AUTHORED label needs in a single call;
+    all pairs must be declared in the initial CREATE REL TABLE statement.
+    """
+    return f"CREATE REL TABLE IF NOT EXISTS AUTHORED({_join_rel_pairs(pairs)}, id STRING)"
+
+
+def rel_schema_modifies(pairs: list[RelPair]) -> str:
+    """Return the CREATE REL TABLE DDL for Modifies relationships.
+
+    Pass every (from, to) pair the MODIFIES label needs in a single call;
+    all pairs must be declared in the initial CREATE REL TABLE statement.
+    """
+    return f"CREATE REL TABLE IF NOT EXISTS MODIFIES({_join_rel_pairs(pairs)}, id STRING, additions INT32, deletions INT32)"
 
 
 REL_TYPE_AUTHORED: Final[str] = "AUTHORED"

@@ -6,9 +6,16 @@ message definitions.
 
 - Messages ending in **`Node`** become `CREATE NODE TABLE` statements.
   The first field becomes the primary key.
-- Messages ending in **`Rel`** become REL TABLE factory functions.
-  The `source_id` and `target_id` fields are excluded from columns (they map
-  to the `FROM`/`TO` clause which the caller supplies at runtime).
+- Messages ending in **`Rel`** become REL TABLE factory functions that take
+  a list of `(FROM, TO)` node-type pairs at call time. The `source_id` and
+  `target_id` fields are excluded from columns — they map to the `FROM`/`TO`
+  clauses supplied at runtime.
+
+Ladybug requires every `(FROM, TO)` pair a rel label spans to be declared
+in the *initial* `CREATE REL TABLE` statement. Subsequent
+`CREATE REL TABLE IF NOT EXISTS` calls for an existing label are silent
+no-ops, so the generated factory accepts a variable list of pairs and
+expands them all into a single DDL statement.
 
 Proto types are mapped to LadybugDB column types automatically. Column names
 default to the proto field name, but can be overridden with the
@@ -102,39 +109,75 @@ export const NODE_SCHEMA_STATEMENTS = [
 export const NODE_TYPES = ['Function'] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
+export interface RelPair {
+  readonly from: string;
+  readonly to: string;
+}
+
 export const REL_SCHEMA = {
-  Calls: (from: string, to: string) =>
-    `CREATE REL TABLE IF NOT EXISTS Calls(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)`,
+  CALLS: (pairs: ReadonlyArray<RelPair>) =>
+    `CREATE REL TABLE IF NOT EXISTS CALLS(${joinRelPairs(pairs)}, id STRING, args STRING, confidence FLOAT)`,
 } as const;
 
-export const REL_TYPES = ['Calls'] as const;
+export const REL_TYPES = ['CALLS'] as const;
 export type RelType = (typeof REL_TYPES)[number];
 ```
 
 Note how `start_line` became `startLine` via `(ladybug.column)`.
 
-Usage: `REL_SCHEMA.Calls('Function', 'Function')` returns the full DDL.
+Usage (single pair):
+
+```ts
+REL_SCHEMA.CALLS([{ from: 'Function', to: 'Function' }]);
+```
+
+Usage (multi-pair — a single `CREATE REL TABLE` covering every pair the
+label spans):
+
+```ts
+REL_SCHEMA.CALLS([
+  { from: 'Function', to: 'Function' },
+  { from: 'Class',    to: 'Function' },
+]);
+```
 
 ### Go output
 
 ```go
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 var NodeSchemaStatements = []string{
 	`CREATE NODE TABLE IF NOT EXISTS Function(id STRING PRIMARY KEY, name STRING, startLine INT32, endLine INT32, exported BOOL)`,
 }
 
-const NodeTypeFunction = "Function"
-var NodeTypes = []string{NodeTypeFunction}
+const NodeTypeFunction NodeType = "Function"
+var NodeTypes = []NodeType{NodeTypeFunction}
 
-func RelSchemaCalls(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS Calls(FROM %s TO %s, id STRING, args STRING, confidence FLOAT)`, from, to)
+type RelPair struct {
+	From string
+	To   string
 }
 
-const RelTypeCalls = "Calls"
-var RelTypes = []string{RelTypeCalls}
+func RelSchemaCalls(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS CALLS(%s, id STRING, args STRING, confidence FLOAT)`, joinRelPairs(pairs))
+}
+
+const RelTypeCalls RelType = "CALLS"
+var RelTypes = []RelType{RelTypeCalls}
+```
+
+Call sites pass every pair the label needs in one invocation:
+
+```go
+schema.RelSchemaCalls(
+    schema.RelPair{From: "Function", To: "Function"},
+    schema.RelPair{From: "Class",    To: "Function"},
+)
 ```
 
 ### Python output
@@ -149,14 +192,35 @@ NODE_SCHEMA_STATEMENTS: Final[list[str]] = [
 NODE_TYPE_FUNCTION: Final[str] = "Function"
 NODE_TYPES: Final[list[str]] = [NODE_TYPE_FUNCTION]
 
+RelPair = tuple[str, str]
 
-def rel_schema_calls(from_node: str, to_node: str) -> str:
+
+def rel_schema_calls(pairs: list[RelPair]) -> str:
     """Return the CREATE REL TABLE DDL for Calls relationships."""
-    return f"CREATE REL TABLE IF NOT EXISTS Calls(FROM {from_node} TO {to_node}, id STRING, args STRING, confidence FLOAT)"
+    return f"CREATE REL TABLE IF NOT EXISTS CALLS({_join_rel_pairs(pairs)}, id STRING, args STRING, confidence FLOAT)"
 
 
-REL_TYPE_CALLS: Final[str] = "Calls"
+REL_TYPE_CALLS: Final[str] = "CALLS"
 REL_TYPES: Final[list[str]] = [REL_TYPE_CALLS]
+```
+
+Call sites pass a list of `(from, to)` tuples:
+
+```python
+rel_schema_calls([
+    ("Function", "Function"),
+    ("Class",    "Function"),
+])
+```
+
+### Cypher output
+
+Cypher is emitted as a commented template with a `<pairs>` placeholder —
+callers must substitute one or more comma-separated `FROM X TO Y` clauses
+before executing the DDL:
+
+```cypher
+// CREATE REL TABLE IF NOT EXISTS CALLS(<pairs>, id STRING, args STRING, confidence FLOAT);
 ```
 
 ## Column name overrides
@@ -201,6 +265,30 @@ protoc --ladybug_out=./gen -I path/to/protoc-gen-ladybug/proto -I . graph.proto
 | `repeated T` | `T[]` |
 
 Unsupported kinds (messages, enums, etc.) fall back to `STRING`.
+
+## Migrating from the single-pair factory
+
+Earlier versions of the plugin emitted a two-argument factory per rel
+(`RelSchemaCalls(from, to string)`, `REL_SCHEMA.CALLS(from, to)`, etc.).
+That shape could only declare one `(FROM, TO)` pair per label, which
+Ladybug silently accepts for the *first* call but then ignores for every
+subsequent pair — the extra pairs were never registered, and writes that
+needed them failed at bind time with
+`Binder exception: Query node X violates schema. Expected labels are Y`.
+
+The current plugin emits a variadic/array factory that takes a list of
+`RelPair` values and expands them inline into a single `CREATE REL TABLE`
+statement. Update call sites:
+
+| Before | After |
+|---|---|
+| `RelSchemaCalls("Function", "Function")` | `RelSchemaCalls(RelPair{From: "Function", To: "Function"})` |
+| `REL_SCHEMA.CALLS('Function', 'Function')` | `REL_SCHEMA.CALLS([{ from: 'Function', to: 'Function' }])` |
+| `rel_schema_calls("Function", "Function")` | `rel_schema_calls([("Function", "Function")])` |
+
+If a rel label needs to span multiple pairs, pass them all in the same
+call — Ladybug requires every pair to be declared in the *initial*
+statement.
 
 ## Development
 

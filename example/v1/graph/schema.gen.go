@@ -2,7 +2,10 @@
 
 package graph
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // NodeSchemaStatements contains the DDL statements for all node tables.
 var NodeSchemaStatements = []string{
@@ -134,19 +137,49 @@ var NodeColumnNames = map[NodeType][]string{
 	},
 }
 
+// RelPair identifies a (FROM, TO) node-type pair for a relationship table.
+//
+// Ladybug requires every pair a rel label spans to be declared in the
+// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+// NOT EXISTS calls for the same label are silent no-ops. Pass every
+// pair the label needs in a single RelSchema<Name> call.
+type RelPair struct {
+	From string
+	To   string
+}
+
+// joinRelPairs renders a slice of RelPairs as a comma-separated list of
+// "FROM X TO Y" clauses suitable for the body of a CREATE REL TABLE.
+func joinRelPairs(pairs []RelPair) string {
+	parts := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		parts = append(parts, fmt.Sprintf("FROM %s TO %s", p.From, p.To))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // RelSchemaCalls returns the CREATE REL TABLE DDL for Calls relationships.
-func RelSchemaCalls(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS CALLS(FROM %s TO %s, id STRING, args STRING, confidence FLOAT)`, from, to)
+//
+// Pass every (FROM, TO) pair the CALLS label needs in a single call; all
+// pairs must be declared in the initial CREATE REL TABLE statement.
+func RelSchemaCalls(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS CALLS(%s, id STRING, args STRING, confidence FLOAT)`, joinRelPairs(pairs))
 }
 
 // RelSchemaDefinedIn returns the CREATE REL TABLE DDL for DefinedIn relationships.
-func RelSchemaDefinedIn(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM %s TO %s, id STRING, startLine INT32, endLine INT32)`, from, to)
+//
+// Pass every (FROM, TO) pair the DEFINED_IN label needs in a single call; all
+// pairs must be declared in the initial CREATE REL TABLE statement.
+func RelSchemaDefinedIn(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS DEFINED_IN(%s, id STRING, startLine INT32, endLine INT32)`, joinRelPairs(pairs))
 }
 
 // RelSchemaDependsOn returns the CREATE REL TABLE DDL for DependsOn relationships.
-func RelSchemaDependsOn(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(FROM %s TO %s, id STRING, version STRING, dev BOOL)`, from, to)
+//
+// Pass every (FROM, TO) pair the DEPENDS_ON label needs in a single call; all
+// pairs must be declared in the initial CREATE REL TABLE statement.
+func RelSchemaDependsOn(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS DEPENDS_ON(%s, id STRING, version STRING, dev BOOL)`, joinRelPairs(pairs))
 }
 
 // RelType identifies a relationship table type.
