@@ -4,7 +4,11 @@
 CREATE NODE TABLE IF NOT EXISTS Commit(sha STRING PRIMARY KEY, message STRING, timestamp INT64, authorEmail STRING);
 CREATE NODE TABLE IF NOT EXISTS Author(email STRING PRIMARY KEY, name STRING);
 
-// Rel tables — replace %s placeholders with node table names:
-//   e.g. CREATE REL TABLE IF NOT EXISTS Calls(FROM Function TO Function, ...)
-// CREATE REL TABLE IF NOT EXISTS AUTHORED(FROM %s TO %s, id STRING);
-// CREATE REL TABLE IF NOT EXISTS MODIFIES(FROM %s TO %s, id STRING, additions INT32, deletions INT32);
+// Rel tables — replace <pairs> with one or more comma-separated
+// "FROM <NodeType> TO <NodeType>" clauses declaring every node-type
+// pair the rel spans. Ladybug requires all pairs to be declared in the
+// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+// NOT EXISTS calls for the same label are silent no-ops.
+//   e.g. CREATE REL TABLE IF NOT EXISTS EMITS(FROM Service TO LogEvent, FROM Service TO Metric, ...)
+// CREATE REL TABLE IF NOT EXISTS AUTHORED(<pairs>, id STRING);
+// CREATE REL TABLE IF NOT EXISTS MODIFIES(<pairs>, id STRING, additions INT32, deletions INT32);

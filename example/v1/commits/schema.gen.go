@@ -2,7 +2,10 @@
 
 package commits
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // NodeSchemaStatements contains the DDL statements for all node tables.
 var NodeSchemaStatements = []string{
@@ -59,14 +62,41 @@ var NodeColumnNames = map[NodeType][]string{
 	},
 }
 
+// RelPair identifies a (FROM, TO) node-type pair for a relationship table.
+//
+// Ladybug requires every pair a rel label spans to be declared in the
+// initial CREATE REL TABLE statement; subsequent CREATE REL TABLE IF
+// NOT EXISTS calls for the same label are silent no-ops. Pass every
+// pair the label needs in a single RelSchema<Name> call.
+type RelPair struct {
+	From string
+	To   string
+}
+
+// joinRelPairs renders a slice of RelPairs as a comma-separated list of
+// "FROM X TO Y" clauses suitable for the body of a CREATE REL TABLE.
+func joinRelPairs(pairs []RelPair) string {
+	parts := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		parts = append(parts, fmt.Sprintf("FROM %s TO %s", p.From, p.To))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // RelSchemaAuthored returns the CREATE REL TABLE DDL for Authored relationships.
-func RelSchemaAuthored(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS AUTHORED(FROM %s TO %s, id STRING)`, from, to)
+//
+// Pass every (FROM, TO) pair the AUTHORED label needs in a single call; all
+// pairs must be declared in the initial CREATE REL TABLE statement.
+func RelSchemaAuthored(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS AUTHORED(%s, id STRING)`, joinRelPairs(pairs))
 }
 
 // RelSchemaModifies returns the CREATE REL TABLE DDL for Modifies relationships.
-func RelSchemaModifies(from, to string) string {
-	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS MODIFIES(FROM %s TO %s, id STRING, additions INT32, deletions INT32)`, from, to)
+//
+// Pass every (FROM, TO) pair the MODIFIES label needs in a single call; all
+// pairs must be declared in the initial CREATE REL TABLE statement.
+func RelSchemaModifies(pairs ...RelPair) string {
+	return fmt.Sprintf(`CREATE REL TABLE IF NOT EXISTS MODIFIES(%s, id STRING, additions INT32, deletions INT32)`, joinRelPairs(pairs))
 }
 
 // RelType identifies a relationship table type.

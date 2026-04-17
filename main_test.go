@@ -15,6 +15,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -153,8 +155,8 @@ func TestBuildRelDDLTemplate(t *testing.T) {
 			{Name: "confidence", Type: "FLOAT"},
 		},
 	}
-	got := buildRelDDLTemplate(table, "${from}", "${to}")
-	want := "CREATE REL TABLE IF NOT EXISTS CALLS(FROM ${from} TO ${to}, id STRING, args STRING, confidence FLOAT)"
+	got := buildRelDDLTemplate(table, "${joinRelPairs(pairs)}")
+	want := "CREATE REL TABLE IF NOT EXISTS CALLS(${joinRelPairs(pairs)}, id STRING, args STRING, confidence FLOAT)"
 	if got != want {
 		t.Errorf("buildRelDDLTemplate() =\n  %s\nwant:\n  %s", got, want)
 	}
@@ -169,9 +171,65 @@ func TestBuildRelDDLTemplate_GoFormat(t *testing.T) {
 			{Name: "end_line", Type: "INT32"},
 		},
 	}
-	got := buildRelDDLTemplate(table, "%s", "%s")
-	want := "CREATE REL TABLE IF NOT EXISTS DEFINED_IN(FROM %s TO %s, id STRING, start_line INT32, end_line INT32)"
+	got := buildRelDDLTemplate(table, "%s")
+	want := "CREATE REL TABLE IF NOT EXISTS DEFINED_IN(%s, id STRING, start_line INT32, end_line INT32)"
 	if got != want {
 		t.Errorf("buildRelDDLTemplate() =\n  %s\nwant:\n  %s", got, want)
+	}
+}
+
+// TestBuildRelDDLTemplate_MultiPair verifies that the generated Go template,
+// when populated with multiple FROM/TO clauses, yields a single
+// CREATE REL TABLE statement that declares every pair — the exact shape
+// Ladybug requires for a multi-pair rel label.
+func TestBuildRelDDLTemplate_MultiPair(t *testing.T) {
+	table := relTable{
+		Name: "Emits",
+		Columns: []column{
+			{Name: "id", Type: "STRING"},
+			{Name: "count", Type: "INT64"},
+			{Name: "lastSeen", Type: "STRING"},
+			{Name: "windowStart", Type: "STRING"},
+		},
+	}
+	template := buildRelDDLTemplate(table, "%s")
+	pairs := []string{
+		"FROM Service TO LogEvent",
+		"FROM Service TO Metric",
+		"FROM Service TO Error",
+	}
+	got := fmt.Sprintf(template, strings.Join(pairs, ", "))
+	want := "CREATE REL TABLE IF NOT EXISTS EMITS(FROM Service TO LogEvent, FROM Service TO Metric, FROM Service TO Error, id STRING, count INT64, lastSeen STRING, windowStart STRING)"
+	if got != want {
+		t.Errorf("multi-pair expansion =\n  %s\nwant:\n  %s", got, want)
+	}
+	// The result must be a single CREATE REL TABLE statement; all pairs live
+	// inside one parenthesized body.
+	if strings.Count(got, "CREATE REL TABLE") != 1 {
+		t.Errorf("expected exactly one CREATE REL TABLE, got:\n  %s", got)
+	}
+	for _, p := range pairs {
+		if !strings.Contains(got, p) {
+			t.Errorf("expected DDL to contain %q, got:\n  %s", p, got)
+		}
+	}
+}
+
+// TestBuildRelDDLTemplate_SinglePair confirms that calling the factory with
+// exactly one pair still produces valid DDL — the single-pair path is the
+// common case and must not regress when the signature is variadic.
+func TestBuildRelDDLTemplate_SinglePair(t *testing.T) {
+	table := relTable{
+		Name: "Calls",
+		Columns: []column{
+			{Name: "id", Type: "STRING"},
+			{Name: "args", Type: "STRING"},
+		},
+	}
+	template := buildRelDDLTemplate(table, "%s")
+	got := fmt.Sprintf(template, "FROM Function TO Function")
+	want := "CREATE REL TABLE IF NOT EXISTS CALLS(FROM Function TO Function, id STRING, args STRING)"
+	if got != want {
+		t.Errorf("single-pair expansion =\n  %s\nwant:\n  %s", got, want)
 	}
 }
